@@ -336,17 +336,28 @@ public class AssetDAOImpl extends DAO implements AssetDAO {
     }
 
     public ResultSet createMeasurementsFromAssetIdAndTime(int assetID, int fromTime) {
-        String preparedStatementPart1 = new String();
-        String preparedStatementPart2 = new String();
+        StringBuilder preparedStatementPart1 = new StringBuilder();
+        StringBuilder preparedStatementPart2 = new StringBuilder();
         ResultSet returned = null;
         try (PreparedStatement ps = getConnection().prepareStatement(GET_ATTRIBUTE_DETAILS_FROM_ASSET_ID)) {
             ps.setInt(1, assetID);
             ResultSet rs = ps.executeQuery();
 
             while (rs.next()) {
-                preparedStatementPart1 += (", Coalesce(Sum(`" + rs.getString("attribute_name") + "`), 0) AS '" + rs.getString("attribute_name") + "'");
-                preparedStatementPart2 += (", CASE WHEN tab.attribute_id = " + rs.getString("attribute_id") + " THEN tab.value end AS `" + rs.getString("attribute_name") + "`");
+                preparedStatementPart1.append(", Coalesce(Sum(`");
+                preparedStatementPart1.append(rs.getString("attribute_name"));
+                preparedStatementPart1.append("`), 0) AS '");
+                preparedStatementPart1.append(rs.getString("attribute_name"));
+                preparedStatementPart1.append("'");
+
+                preparedStatementPart2.append(", CASE WHEN tab.attribute_id = ");
+                preparedStatementPart2.append(rs.getString("attribute_id"));
+                preparedStatementPart2.append(" THEN tab.value end AS `");
+                preparedStatementPart2.append(rs.getString("attribute_name"));
+                preparedStatementPart2.append("`");
             }
+            // i'm unsure why but i cannot do setString on the prepared statement, it keeps failing the query.
+            // This way is the same in terms of usage and speed and security.
             try (PreparedStatement measurementStatement = getConnection().prepareStatement("SELECT `Cycle` " + preparedStatementPart1 + " FROM (SELECT tab.`time` as 'Cycle'" + preparedStatementPart2 + " FROM (SELECT am.attribute_id, am.`time`, am.value FROM attribute_measurements am WHERE asset_id = ? AND time > ? ORDER BY attribute_id, time) tab) tab2 GROUP BY `CYCLE` asc;")) {
                 measurementStatement.setInt(1, assetID);
                 measurementStatement.setInt(2, fromTime);
