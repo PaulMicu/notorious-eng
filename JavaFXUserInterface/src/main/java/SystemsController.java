@@ -58,6 +58,7 @@ public class SystemsController implements Initializable {
     private ObservableList<Asset> systems;
     private final AssetTypeDAOImpl assetTypeDAO;
     private final ModelDAOImpl modelDAO;
+    private Timeline rulTimeline;
 
     private final String RECOMMENDATION_COL = "Recommendation";
 
@@ -70,7 +71,6 @@ public class SystemsController implements Initializable {
         } catch (Exception e) {
             e.printStackTrace();
         }
-
     }
 
     /**
@@ -87,8 +87,22 @@ public class SystemsController implements Initializable {
         uiUtilities = new UIUtilities();
 
         attachEvents();
+        updateRULs();
         generateThumbnails();
 
+    }
+
+    public void updateRULs() {
+        rulTimeline =
+                new Timeline(new KeyFrame(Duration.millis(3000), e ->
+                {
+                    for (Asset asset:systems) {
+                        asset.setRul(String.valueOf(new DecimalFormat("#.##").format(AssessmentController.getLatestEstimate(asset.getId()))));
+                    }
+                }));
+
+        rulTimeline.setCycleCount(Animation.INDEFINITE); // loop forever
+        rulTimeline.play();
     }
 
     /**
@@ -196,17 +210,12 @@ public class SystemsController implements Initializable {
             String RECOMMENDATION = "Recommendation: ";
             String LINEAR_RUL = "Linear RUL: ";
             Text linearLabel = new Text(LINEAR_RUL);
-            Text linearRUL = new Text(String.valueOf(new DecimalFormat("#.##").format(AssessmentController.getLatestEstimate(system.getId()))));
             Text recommendationLabel = new Text(RECOMMENDATION);
             Text recommendation = new Text(system.getRecommendation());
 
-            Timeline timeline =
-                    new Timeline(new KeyFrame(Duration.millis(1000), e -> linearRUL.setText(String.valueOf(new DecimalFormat("#.##").format(AssessmentController.getLatestEstimate(system.getId()))))));
-
-            timeline.setCycleCount(Animation.INDEFINITE); // loop forever
-            timeline.play();
-
-
+            Text linearRUL = new Text();
+            SimpleStringProperty s = system.getRul();
+            linearRUL.textProperty().bind(s);
 
             systemName.setId("systemName");
             systemType.setId("systemType");
