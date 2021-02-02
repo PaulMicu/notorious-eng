@@ -5,11 +5,8 @@ import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.beans.property.SimpleStringProperty;
-import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import javafx.event.Event;
-import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.chart.CategoryAxis;
@@ -21,7 +18,6 @@ import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.Pane;
 import javafx.scene.text.Text;
-import javafx.util.Callback;
 import javafx.util.Duration;
 import local.AssetDAOImpl;
 import local.AssetTypeDAOImpl;
@@ -82,6 +78,8 @@ public class SystemInfoController implements Initializable {
     private AttributeDAOImpl attributeDAOImpl;
     private ModelDAOImpl modelDAO;
     private UIUtilities uiUtilities;
+
+    private Timeline rawDataTimeline;
 
     /**
      * Initialize runs before the scene is displayed.
@@ -193,18 +191,19 @@ public class SystemInfoController implements Initializable {
      * @author Jeff
      */
     public void attachEvents() {
-        systemMenuBtn.setOnMouseClicked(mouseEvent -> uiUtilities.changeScene(mouseEvent, "/Systems"));
+        systemMenuBtn.setOnMouseClicked(mouseEvent -> {
+            rawDataTimeline.stop();
+            uiUtilities.changeScene(mouseEvent, "/Systems");
+        });
         //Attach link to systemTypeMenuBtn to go to SystemTypeList.fxml
         systemTypeMenuBtn.setOnMouseClicked(mouseEvent -> uiUtilities.changeScene(mouseEvent, "/SystemTypeList"));
         deleteBtn.setOnMouseClicked(this::deleteDialog);
 
-        rawDataTab.setOnSelectionChanged(new EventHandler<Event>() {
-            @Override
-            public void handle(Event event) {
+        rawDataTab.setOnSelectionChanged(event ->  {
                 rawDataListPane.getChildren().clear();
                 generateRawDataTable();
-            }
-        });
+            });
+
     }
 
     /**
@@ -238,41 +237,24 @@ public class SystemInfoController implements Initializable {
     }
 
     public void generateRawDataTable() {
-        TableView tableview = new TableView();
+        TableView<ObservableList> tableview = new TableView<>();
         ObservableList<ObservableList> data = FXCollections.observableArrayList();
         AtomicInteger lastCycle = new AtomicInteger();
         ResultSet resultSet = assetDAOImpl.createMeasurementsFromAssetIdAndTime(system.getId(), lastCycle.get());
         try {
             for (int i = 0; i < resultSet.getMetaData().getColumnCount(); i++) {
                 final int j = i;
-                TableColumn col = new TableColumn(resultSet.getMetaData().getColumnName(i + 1));
-                col.setCellValueFactory(new Callback<TableColumn.CellDataFeatures<ObservableList, String>, ObservableValue<String>>() {
-                    public ObservableValue<String> call(TableColumn.CellDataFeatures<ObservableList, String> param) {
-                        return new SimpleStringProperty(param.getValue().get(j).toString());
-                    }
-                });
+                TableColumn<ObservableList, String> col = new TableColumn(resultSet.getMetaData().getColumnName(i + 1));
+                col.setCellValueFactory(param -> new SimpleStringProperty(param.getValue().get(j).toString()));
                 tableview.getColumns().addAll(col);
             }
 
-            Timeline timeline = new Timeline(new KeyFrame(Duration.millis(1000), e -> {
-                ResultSet rs = assetDAOImpl.createMeasurementsFromAssetIdAndTime(system.getId(), lastCycle.get());
-                try {
-                    while (rs.next()) {
-                        ObservableList<String> row = FXCollections.observableArrayList();
-                        for (int i = 1; i <= rs.getMetaData().getColumnCount(); i++) {
-                            row.add(rs.getString(i));
-                        }
-                        data.add(0, row);
-                    }
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                    System.out.println("Error on Building Data");
-                }
-                lastCycle.set(data.size());
-            }));
+            updateRawTableView(data,lastCycle);
+            if (rawDataTimeline == null)
+                rawDataTimeline = new Timeline(new KeyFrame(Duration.millis(1000), e -> updateRawTableView(data,lastCycle)));
 
-            timeline.setCycleCount(Animation.INDEFINITE); // loop forever
-            timeline.play();
+            rawDataTimeline.setCycleCount(Animation.INDEFINITE); // loop forever
+            rawDataTimeline.play();
 
 
             tableview.setItems(data);
@@ -288,5 +270,22 @@ public class SystemInfoController implements Initializable {
         AnchorPane.setRightAnchor(tableview, 0.0);
         AnchorPane.setLeftAnchor(tableview, 0.0);
         rawDataListPane.getChildren().addAll(tableview);
+    }
+
+    private void updateRawTableView(ObservableList<ObservableList> data, AtomicInteger lastCycle ){
+        ResultSet rs = assetDAOImpl.createMeasurementsFromAssetIdAndTime(system.getId(), lastCycle.get());
+        try {
+            while (rs.next()) {
+                ObservableList<String> row = FXCollections.observableArrayList();
+                for (int i = 1; i <= rs.getMetaData().getColumnCount(); i++) {
+                    row.add(rs.getString(i));
+                }
+                data.add(0, row);
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            System.out.println("Error on Building Data");
+        }
+        lastCycle.set(data.size());
     }
 }
