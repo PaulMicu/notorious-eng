@@ -192,7 +192,8 @@ public class SystemInfoController implements Initializable {
      */
     public void attachEvents() {
         systemMenuBtn.setOnMouseClicked(mouseEvent -> {
-            rawDataTimeline.stop();
+            if (rawDataTimeline != null)
+                rawDataTimeline.stop();
             uiUtilities.changeScene(mouseEvent, "/Systems");
         });
         //Attach link to systemTypeMenuBtn to go to SystemTypeList.fxml
